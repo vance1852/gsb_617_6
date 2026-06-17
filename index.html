@@ -4,1467 +4,222 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>雅丹地貌形成过程模拟实验</title>
-    <!-- 
+    <!--
     ========================================
     运行说明 / HOW TO RUN
     ========================================
     方式1: 直接双击此HTML文件在浏览器中打开（推荐）
     方式2: 使用本地服务器: npx serve . 然后访问 http://localhost:3000
-    
+
     注意: 需要网络连接以加载Three.js 3D引擎
     ========================================
   -->
-    <style>
-      :root {
-        --primary: #00f3ff;
-        --secondary: #0077ff;
-        --accent: #00ff88;
-        --warning: #ffaa00;
-        --bg: #020408;
-        --panel: rgba(5, 15, 30, 0.95);
-        --text: #e0f0ff;
-        --text-dim: #8ab4f8;
-        --glow: rgba(0, 243, 255, 0.15);
-      }
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      body {
-        overflow: hidden;
-        background: var(--bg);
-        color: var(--text);
-        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-        display: flex;
-        height: 100vh;
-        width: 100vw;
-      }
-      #left-panel {
-        width: clamp(280px, 25vw, 380px);
-        background: var(--panel);
-        border-right: 1px solid var(--secondary);
-        display: flex;
-        flex-direction: column;
-        backdrop-filter: blur(20px);
-        z-index: 10;
-        position: relative;
-        overflow: hidden;
-        box-shadow:
-          5px 0 30px rgba(0, 119, 255, 0.15),
-          inset -1px 0 0 rgba(0, 243, 255, 0.1);
-      }
-      #left-panel::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background:
-          linear-gradient(
-            90deg,
-            transparent 49%,
-            rgba(0, 119, 255, 0.03) 50%,
-            transparent 51%
-          ),
-          linear-gradient(
-            0deg,
-            transparent 49%,
-            rgba(0, 119, 255, 0.03) 50%,
-            transparent 51%
-          );
-        background-size: 30px 30px;
-        pointer-events: none;
-        z-index: 0;
-      }
-      #left-panel::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 2px;
-        height: 100%;
-        background: linear-gradient(
-          180deg,
-          transparent 0%,
-          var(--primary) 20%,
-          var(--primary) 80%,
-          transparent 100%
-        );
-        animation: borderPulse 3s ease-in-out infinite;
-        box-shadow:
-          0 0 15px var(--primary),
-          0 0 30px var(--primary);
-      }
-      @keyframes borderPulse {
-        0%,
-        100% {
-          opacity: 0.4;
-        }
-        50% {
-          opacity: 1;
-        }
-      }
-      @keyframes scanLine {
-        0% {
-          top: -10%;
-        }
-        100% {
-          top: 110%;
-        }
-      }
-      .panel-scan {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 80px;
-        background: linear-gradient(
-          180deg,
-          transparent,
-          rgba(0, 243, 255, 0.08),
-          transparent
-        );
-        animation: scanLine 4s linear infinite;
-        pointer-events: none;
-        z-index: 1;
-      }
-      .corner-decor {
-        position: absolute;
-        width: 20px;
-        height: 20px;
-        border: 2px solid var(--primary);
-        z-index: 2;
-        opacity: 0.6;
-      }
-      .corner-decor.tl {
-        top: 8px;
-        left: 8px;
-        border-right: none;
-        border-bottom: none;
-      }
-      .corner-decor.tr {
-        top: 8px;
-        right: 8px;
-        border-left: none;
-        border-bottom: none;
-      }
-      .corner-decor.bl {
-        bottom: 8px;
-        left: 8px;
-        border-right: none;
-        border-top: none;
-      }
-      .corner-decor.br {
-        bottom: 8px;
-        right: 8px;
-        border-left: none;
-        border-top: none;
-      }
-      .panel-scroll {
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding: 15px;
-        position: relative;
-        z-index: 2;
-      }
-      .panel-scroll::-webkit-scrollbar {
-        width: 4px;
-      }
-      .panel-scroll::-webkit-scrollbar-thumb {
-        background: var(--secondary);
-        border-radius: 2px;
-      }
-      #right-panel {
-        flex: 1;
-        position: relative;
-        background: radial-gradient(ellipse at center, #0a1828 0%, #000 100%);
-      }
-      .header {
-        padding: 18px 15px;
-        background: linear-gradient(
-          135deg,
-          rgba(0, 243, 255, 0.12),
-          rgba(0, 119, 255, 0.08)
-        );
-        border-bottom: 1px solid rgba(0, 119, 255, 0.4);
-        position: relative;
-        z-index: 2;
-      }
-      .header::before,
-      .header::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          var(--primary),
-          transparent
-        );
-      }
-      .header::before {
-        top: 0;
-      }
-      .header::after {
-        bottom: 0;
-        box-shadow: 0 0 10px var(--primary);
-      }
-      h1 {
-        font-size: clamp(14px, 1.2vw, 18px);
-        color: var(--primary);
-        text-transform: uppercase;
-        letter-spacing: 3px;
-        text-shadow:
-          0 0 20px var(--primary),
-          0 0 40px rgba(0, 243, 255, 0.4);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      h1 .icon {
-        width: 28px;
-        height: 28px;
-        background: linear-gradient(135deg, var(--primary), var(--secondary));
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        box-shadow:
-          0 0 15px var(--primary),
-          inset 0 0 10px rgba(255, 255, 255, 0.2);
-        animation: iconPulse 2s ease-in-out infinite;
-      }
-      @keyframes iconPulse {
-        0%,
-        100% {
-          box-shadow:
-            0 0 15px var(--primary),
-            inset 0 0 10px rgba(255, 255, 255, 0.2);
-        }
-        50% {
-          box-shadow:
-            0 0 25px var(--primary),
-            0 0 40px rgba(0, 243, 255, 0.3),
-            inset 0 0 10px rgba(255, 255, 255, 0.2);
-        }
-      }
-      .subtitle {
-        font-size: 10px;
-        color: var(--text-dim);
-        margin-top: 6px;
-        letter-spacing: 2px;
-        font-family: "Consolas", monospace;
-      }
-      .subtitle::before {
-        content: "// ";
-        color: var(--secondary);
-      }
-      h2 {
-        font-size: clamp(11px, 1vw, 13px);
-        color: var(--text);
-        margin: 15px 0 10px;
-        padding: 6px 12px;
-        border-left: 3px solid var(--primary);
-        position: relative;
-        background: linear-gradient(90deg, rgba(0, 243, 255, 0.1), transparent);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
-      h2::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 3px;
-        height: 100%;
-        background: var(--primary);
-        box-shadow:
-          0 0 10px var(--primary),
-          0 0 20px var(--primary);
-      }
-      h2::after {
-        content: "◆";
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 8px;
-        color: var(--primary);
-        opacity: 0.5;
-      }
-      .control-group {
-        margin-bottom: 12px;
-        background: linear-gradient(
-          135deg,
-          rgba(0, 119, 255, 0.08),
-          rgba(0, 20, 40, 0.5)
-        );
-        padding: 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(0, 119, 255, 0.2);
-        transition: all 0.3s;
-        position: relative;
-        overflow: hidden;
-      }
-      .control-group::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 1px;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          rgba(0, 243, 255, 0.5),
-          transparent
-        );
-      }
-      .control-group:hover {
-        border-color: rgba(0, 243, 255, 0.5);
-        box-shadow:
-          0 0 20px rgba(0, 243, 255, 0.15),
-          inset 0 0 30px rgba(0, 243, 255, 0.05);
-        transform: translateX(2px);
-      }
-      label {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-        font-size: clamp(10px, 0.9vw, 12px);
-        color: var(--text-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-      .value-display {
-        color: var(--primary);
-        font-family: "Consolas", monospace;
-        font-size: clamp(11px, 1vw, 13px);
-        text-shadow: 0 0 8px var(--primary);
-        padding: 2px 8px;
-        background: rgba(0, 243, 255, 0.1);
-        border-radius: 4px;
-        border: 1px solid rgba(0, 243, 255, 0.3);
-      }
-      input[type="range"] {
-        width: 100%;
-        -webkit-appearance: none;
-        appearance: none;
-        background: transparent;
-        margin: 8px 0;
-      }
-      input[type="range"]::-webkit-slider-runnable-track {
-        height: 4px;
-        background: linear-gradient(90deg, var(--secondary), var(--primary));
-        border-radius: 2px;
-        box-shadow: 0 0 10px rgba(0, 119, 255, 0.5);
-      }
-      input[type="range"]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, #fff, var(--primary));
-        cursor: pointer;
-        margin-top: -6px;
-        box-shadow:
-          0 0 15px var(--primary),
-          0 0 30px rgba(0, 243, 255, 0.6);
-        border: 2px solid rgba(255, 255, 255, 0.3);
-      }
-      .stage-indicator {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 10px;
-        font-size: clamp(8px, 0.7vw, 10px);
-        position: relative;
-        padding: 8px 0;
-      }
-      .stage-indicator::before {
-        content: "";
-        position: absolute;
-        top: 50%;
-        left: 5%;
-        right: 5%;
-        height: 2px;
-        background: linear-gradient(90deg, var(--secondary), var(--primary));
-        opacity: 0.3;
-        box-shadow: 0 0 10px var(--secondary);
-      }
-      .stage-dot {
-        background: rgba(10, 25, 50, 0.9);
-        padding: 4px 8px;
-        border-radius: 4px;
-        border: 1px solid rgba(0, 119, 255, 0.4);
-        position: relative;
-        z-index: 1;
-        cursor: pointer;
-        transition: all 0.3s;
-        white-space: nowrap;
-        font-family: "Consolas", monospace;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-      .stage-dot::before {
-        content: "";
-        position: absolute;
-        top: -4px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 8px;
-        height: 8px;
-        background: var(--secondary);
-        border-radius: 50%;
-        opacity: 0;
-        transition: all 0.3s;
-      }
-      .stage-dot:hover {
-        border-color: var(--primary);
-        background: rgba(0, 243, 255, 0.15);
-      }
-      .stage-dot.active {
-        color: #fff;
-        background: linear-gradient(
-          135deg,
-          rgba(0, 243, 255, 0.3),
-          rgba(0, 119, 255, 0.2)
-        );
-        border-color: var(--primary);
-        box-shadow:
-          0 0 15px var(--primary),
-          inset 0 0 10px rgba(0, 243, 255, 0.2);
-        transform: scale(1.1);
-      }
-      .stage-dot.active::before {
-        opacity: 1;
-        background: var(--primary);
-        box-shadow: 0 0 10px var(--primary);
-      }
-      .stage-dot.completed {
-        background: linear-gradient(
-          135deg,
-          rgba(0, 255, 136, 0.2),
-          rgba(0, 200, 100, 0.1)
-        );
-        border-color: var(--accent);
-        color: var(--accent);
-      }
-      .stage-dot.completed::before {
-        opacity: 1;
-        background: var(--accent);
-      }
-      .btn-group {
-        display: flex;
-        gap: 10px;
-        margin: 12px 0;
-      }
-      .btn {
-        flex: 1;
-        padding: 10px 12px;
-        border: 1px solid var(--secondary);
-        border-radius: 6px;
-        background: linear-gradient(
-          135deg,
-          rgba(0, 119, 255, 0.15),
-          rgba(0, 40, 80, 0.3)
-        );
-        color: var(--text);
-        font-size: clamp(10px, 0.9vw, 12px);
-        cursor: pointer;
-        transition: all 0.3s;
-        position: relative;
-        overflow: hidden;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        font-weight: 500;
-      }
-      .btn::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          rgba(0, 243, 255, 0.3),
-          transparent
-        );
-        transition: left 0.5s;
-      }
-      .btn::after {
-        content: "";
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          var(--primary),
-          transparent
-        );
-        opacity: 0;
-        transition: opacity 0.3s;
-      }
-      .btn:hover::before {
-        left: 100%;
-      }
-      .btn:hover::after {
-        opacity: 1;
-      }
-      .btn:hover {
-        border-color: var(--primary);
-        box-shadow:
-          0 0 20px rgba(0, 243, 255, 0.4),
-          inset 0 0 20px rgba(0, 243, 255, 0.1);
-        transform: translateY(-2px);
-      }
-      .btn.active {
-        background: linear-gradient(
-          135deg,
-          rgba(0, 243, 255, 0.35),
-          rgba(0, 119, 255, 0.25)
-        );
-        border-color: var(--primary);
-        box-shadow:
-          0 0 25px rgba(0, 243, 255, 0.5),
-          inset 0 0 15px rgba(0, 243, 255, 0.2);
-      }
-      .btn.active::after {
-        opacity: 1;
-        animation: btnGlow 1.5s ease-in-out infinite;
-      }
-      @keyframes btnGlow {
-        0%,
-        100% {
-          opacity: 0.5;
-        }
-        50% {
-          opacity: 1;
-        }
-      }
-      #explanation-box {
-        background: linear-gradient(
-          135deg,
-          rgba(0, 30, 60, 0.6),
-          rgba(0, 15, 35, 0.8)
-        );
-        border: 1px solid rgba(0, 119, 255, 0.35);
-        border-radius: 8px;
-        padding: 15px;
-        font-size: clamp(11px, 0.95vw, 13px);
-        line-height: 1.7;
-        color: #bbb;
-        position: relative;
-        overflow: hidden;
-      }
-      #explanation-box::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          var(--primary),
-          transparent
-        );
-        box-shadow: 0 0 10px var(--primary);
-      }
-      #explanation-box::after {
-        content: "";
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          rgba(0, 119, 255, 0.5),
-          transparent
-        );
-      }
-      #explanation-box b {
-        color: var(--primary);
-        text-shadow: 0 0 5px var(--primary);
-      }
-      #explanation-box .highlight {
-        color: var(--accent);
-        text-shadow: 0 0 5px var(--accent);
-      }
-      .tech-line {
-        height: 2px;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          var(--primary) 50%,
-          transparent
-        );
-        margin: 15px 0;
-        position: relative;
-        box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
-      }
-      .tech-line::before {
-        content: "◆";
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        color: var(--primary);
-        font-size: 10px;
-        background: var(--panel);
-        padding: 0 8px;
-        text-shadow: 0 0 10px var(--primary);
-      }
-      canvas {
-        display: block;
-      }
-      #loading {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        color: var(--primary);
-        font-size: 16px;
-        text-shadow: 0 0 20px var(--primary);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 15px;
-      }
-      .loader {
-        width: 40px;
-        height: 40px;
-        border: 2px solid transparent;
-        border-top-color: var(--primary);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-      .info-overlay {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        background: rgba(5, 15, 30, 0.85);
-        border: 1px solid var(--secondary);
-        border-radius: 8px;
-        padding: 10px 14px;
-        font-size: clamp(10px, 0.9vw, 12px);
-        backdrop-filter: blur(10px);
-      }
-      .info-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 15px;
-        margin-bottom: 5px;
-      }
-      .info-row:last-child {
-        margin-bottom: 0;
-      }
-      .info-label {
-        color: var(--text-dim);
-      }
-      .info-value {
-        color: var(--primary);
-        font-family: monospace;
-      }
-      .weather-info {
-        position: absolute;
-        top: 12px;
-        left: 12px;
-        background: rgba(5, 15, 30, 0.85);
-        border: 1px solid var(--secondary);
-        border-radius: 8px;
-        padding: 12px 16px;
-        font-size: 12px;
-        backdrop-filter: blur(10px);
-      }
-      .weather-row {
-        display: grid;
-        grid-template-columns: 22px 40px 70px;
-        align-items: center;
-        margin-bottom: 6px;
-      }
-      .weather-row:last-child {
-        margin-bottom: 0;
-      }
-      .weather-icon {
-        font-size: 14px;
-        text-align: center;
-      }
-      .weather-label {
-        color: var(--text-dim);
-      }
-      .weather-value {
-        color: var(--warning);
-        font-family: "Consolas", monospace;
-        text-align: right;
-      }
-      .view-controls {
-        position: absolute;
-        bottom: 12px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 6px;
-        background: rgba(5, 15, 30, 0.85);
-        padding: 8px 12px;
-        border-radius: 8px;
-        border: 1px solid var(--secondary);
-      }
-      .view-btn {
-        width: 32px;
-        height: 32px;
-        border-radius: 6px;
-        border: 1px solid #333;
-        background: #1a2635;
-        color: var(--text-dim);
-        cursor: pointer;
-        font-size: 14px;
-        transition: all 0.3s;
-        position: relative;
-      }
-      .view-btn:hover,
-      .view-btn.active {
-        background: rgba(0, 243, 255, 0.2);
-        border-color: var(--primary);
-        color: var(--primary);
-        box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
-      }
-      .view-btn::after {
-        content: attr(data-tip);
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0, 20, 40, 0.95);
-        color: var(--primary);
-        padding: 5px 8px;
-        border-radius: 4px;
-        font-size: 10px;
-        white-space: nowrap;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.2s;
-        margin-bottom: 6px;
-        border: 1px solid var(--secondary);
-      }
-      .view-btn:hover::after {
-        opacity: 1;
-      }
-      .scanline {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        pointer-events: none;
-        background: repeating-linear-gradient(
-          0deg,
-          transparent,
-          transparent 2px,
-          rgba(0, 243, 255, 0.01) 2px,
-          rgba(0, 243, 255, 0.01) 4px
-        );
-        z-index: 5;
-      }
-    </style>
+    <link rel="stylesheet" href="css/style.css" />
   </head>
-  <body></body>
-</html>
-<div id="left-panel">
-  <div class="panel-scan"></div>
-  <div class="corner-decor tl"></div>
-  <div class="corner-decor tr"></div>
-  <div class="corner-decor bl"></div>
-  <div class="corner-decor br"></div>
-  <div class="header">
-    <h1><span class="icon">🏜</span>雅丹地貌模拟系统</h1>
-    <div class="subtitle">YARDANG LANDFORM SIMULATION v2.0</div>
-  </div>
-  <div class="panel-scroll">
-    <div class="control-group">
-      <label
-        >实验进度 <span class="value-display" id="progress-val">0%</span></label
-      >
-      <input
-        type="range"
-        id="progress-slider"
-        min="0"
-        max="100"
-        step="0.5"
-        value="0"
-      />
-      <div class="stage-indicator">
-        <span class="stage-dot active" data-stage="0">初始</span>
-        <span class="stage-dot" data-stage="1">沉降</span>
-        <span class="stage-dot" data-stage="2">沉积</span>
-        <span class="stage-dot" data-stage="3">干裂</span>
-        <span class="stage-dot" data-stage="4">侵蚀</span>
+  <body>
+    <div id="left-panel">
+      <div class="panel-scan"></div>
+      <div class="corner-decor tl"></div>
+      <div class="corner-decor tr"></div>
+      <div class="corner-decor bl"></div>
+      <div class="corner-decor br"></div>
+      <div class="header">
+        <h1><span class="icon">🏜</span>雅丹地貌模拟系统</h1>
+        <div class="subtitle">YARDANG LANDFORM SIMULATION v2.0</div>
+      </div>
+      <div class="panel-scroll">
+        <div class="control-group">
+          <label
+            >实验进度
+            <span class="value-display" id="progress-val">0%</span></label
+          >
+          <input
+            type="range"
+            id="progress-slider"
+            min="0"
+            max="100"
+            step="0.5"
+            value="0"
+          />
+          <div class="stage-indicator">
+            <span class="stage-dot active" data-stage="0">初始</span>
+            <span class="stage-dot" data-stage="1">沉降</span>
+            <span class="stage-dot" data-stage="2">沉积</span>
+            <span class="stage-dot" data-stage="3">干裂</span>
+            <span class="stage-dot" data-stage="4">侵蚀</span>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn" id="playBtn">▶ 播放</button>
+          <button class="btn" id="resetBtn">↺ 重置</button>
+        </div>
+        <div class="tech-line"></div>
+        <h2>地壳运动</h2>
+        <div class="control-group">
+          <label
+            >下沉深度
+            <span class="value-display" id="subsidence-val">2.0m</span></label
+          >
+          <input
+            type="range"
+            id="subsidence-slider"
+            min="0.5"
+            max="4.0"
+            step="0.1"
+            value="2.0"
+          />
+        </div>
+        <h2>湖泊参数</h2>
+        <div class="control-group">
+          <label
+            >水位高度
+            <span class="value-display" id="water-val">1.5m</span></label
+          >
+          <input
+            type="range"
+            id="water-slider"
+            min="0.5"
+            max="3.0"
+            step="0.1"
+            value="1.5"
+          />
+        </div>
+        <div class="control-group">
+          <label
+            >沉积厚度
+            <span class="value-display" id="sediment-val">1.0m</span></label
+          >
+          <input
+            type="range"
+            id="sediment-slider"
+            min="0.3"
+            max="2.0"
+            step="0.1"
+            value="1.0"
+          />
+        </div>
+        <h2>气候暖干</h2>
+        <div class="control-group">
+          <label
+            >干旱化速率
+            <span class="value-display" id="arid-val">1.0x</span></label
+          >
+          <input
+            type="range"
+            id="arid-slider"
+            min="0.5"
+            max="2.0"
+            step="0.1"
+            value="1.0"
+          />
+        </div>
+        <h2>风蚀参数</h2>
+        <div class="control-group">
+          <label
+            >风力强度
+            <span class="value-display" id="erosion-val">1.0</span></label
+          >
+          <input
+            type="range"
+            id="erosion-slider"
+            min="0.1"
+            max="2.0"
+            step="0.1"
+            value="1.0"
+          />
+        </div>
+        <div class="control-group">
+          <label
+            >垄脊密度
+            <span class="value-display" id="density-val">10</span></label
+          >
+          <input
+            type="range"
+            id="density-slider"
+            min="5"
+            max="20"
+            step="1"
+            value="10"
+          />
+        </div>
+        <div class="tech-line"></div>
+        <h2>实验讲解</h2>
+        <div id="explanation-box">
+          欢迎使用<b>雅丹地貌模拟平台</b>。<br /><br />
+          拖动进度条或点击<b>播放</b>开始模拟。<br /><br />
+          <b>当前：</b>初始平原阶段
+        </div>
       </div>
     </div>
-    <div class="btn-group">
-      <button class="btn" id="playBtn">▶ 播放</button>
-      <button class="btn" id="resetBtn">↺ 重置</button>
+    <div id="right-panel">
+      <div class="scanline"></div>
+      <div id="loading">
+        <div class="loader"></div>
+        加载3D场景...
+      </div>
+      <div class="weather-info">
+        <div class="weather-row">
+          <span class="weather-icon">🌡</span
+          ><span class="weather-label">温度</span
+          ><span class="weather-value" id="temp-val">18°C</span>
+        </div>
+        <div class="weather-row">
+          <span class="weather-icon">💧</span
+          ><span class="weather-label">湿度</span
+          ><span class="weather-value" id="humid-val">45%</span>
+        </div>
+        <div class="weather-row">
+          <span class="weather-icon">💨</span
+          ><span class="weather-label">风速</span
+          ><span class="weather-value" id="wind-val">0 m/s</span>
+        </div>
+      </div>
+      <div class="info-overlay">
+        <div class="info-row">
+          <span class="info-label">模拟时间</span
+          ><span class="info-value" id="sim-time">0 万年</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">当前阶段</span
+          ><span class="info-value" id="sim-stage">初始平原</span>
+        </div>
+      </div>
+      <div class="view-controls">
+        <button class="view-btn" onclick="setView('top')" data-tip="俯视视角">
+          ⬇
+        </button>
+        <button class="view-btn" onclick="setView('front')" data-tip="正面视角">
+          ◯
+        </button>
+        <button class="view-btn" onclick="setView('side')" data-tip="侧面视角">
+          ◐
+        </button>
+        <button
+          class="view-btn active"
+          onclick="setView('free')"
+          data-tip="自由视角"
+        >
+          ◈
+        </button>
+        <button
+          class="view-btn"
+          onclick="toggleRotate()"
+          id="rotateBtn"
+          data-tip="自动旋转"
+        >
+          ↻
+        </button>
+      </div>
     </div>
-    <div class="tech-line"></div>
-    <h2>地壳运动</h2>
-    <div class="control-group">
-      <label
-        >下沉深度
-        <span class="value-display" id="subsidence-val">2.0m</span></label
-      >
-      <input
-        type="range"
-        id="subsidence-slider"
-        min="0.5"
-        max="4.0"
-        step="0.1"
-        value="2.0"
-      />
-    </div>
-    <h2>湖泊参数</h2>
-    <div class="control-group">
-      <label
-        >水位高度 <span class="value-display" id="water-val">1.5m</span></label
-      >
-      <input
-        type="range"
-        id="water-slider"
-        min="0.5"
-        max="3.0"
-        step="0.1"
-        value="1.5"
-      />
-    </div>
-    <div class="control-group">
-      <label
-        >沉积厚度
-        <span class="value-display" id="sediment-val">1.0m</span></label
-      >
-      <input
-        type="range"
-        id="sediment-slider"
-        min="0.3"
-        max="2.0"
-        step="0.1"
-        value="1.0"
-      />
-    </div>
-    <h2>气候暖干</h2>
-    <div class="control-group">
-      <label
-        >干旱化速率 <span class="value-display" id="arid-val">1.0x</span></label
-      >
-      <input
-        type="range"
-        id="arid-slider"
-        min="0.5"
-        max="2.0"
-        step="0.1"
-        value="1.0"
-      />
-    </div>
-    <h2>风蚀参数</h2>
-    <div class="control-group">
-      <label
-        >风力强度 <span class="value-display" id="erosion-val">1.0</span></label
-      >
-      <input
-        type="range"
-        id="erosion-slider"
-        min="0.1"
-        max="2.0"
-        step="0.1"
-        value="1.0"
-      />
-    </div>
-    <div class="control-group">
-      <label
-        >垄脊密度 <span class="value-display" id="density-val">10</span></label
-      >
-      <input
-        type="range"
-        id="density-slider"
-        min="5"
-        max="20"
-        step="1"
-        value="10"
-      />
-    </div>
-    <div class="tech-line"></div>
-    <h2>实验讲解</h2>
-    <div id="explanation-box">
-      欢迎使用<b>雅丹地貌模拟平台</b>。<br /><br />
-      拖动进度条或点击<b>播放</b>开始模拟。<br /><br />
-      <b>当前：</b>初始平原阶段
-    </div>
-  </div>
-</div>
-<div id="right-panel">
-  <div class="scanline"></div>
-  <div id="loading">
-    <div class="loader"></div>
-    加载3D场景...
-  </div>
-  <div class="weather-info">
-    <div class="weather-row">
-      <span class="weather-icon">🌡</span><span class="weather-label">温度</span
-      ><span class="weather-value" id="temp-val">18°C</span>
-    </div>
-    <div class="weather-row">
-      <span class="weather-icon">💧</span><span class="weather-label">湿度</span
-      ><span class="weather-value" id="humid-val">45%</span>
-    </div>
-    <div class="weather-row">
-      <span class="weather-icon">💨</span><span class="weather-label">风速</span
-      ><span class="weather-value" id="wind-val">0 m/s</span>
-    </div>
-  </div>
-  <div class="info-overlay">
-    <div class="info-row">
-      <span class="info-label">模拟时间</span
-      ><span class="info-value" id="sim-time">0 万年</span>
-    </div>
-    <div class="info-row">
-      <span class="info-label">当前阶段</span
-      ><span class="info-value" id="sim-stage">初始平原</span>
-    </div>
-  </div>
-  <div class="view-controls">
-    <button class="view-btn" onclick="setView('top')" data-tip="俯视视角">
-      ⬇
-    </button>
-    <button class="view-btn" onclick="setView('front')" data-tip="正面视角">
-      ◯
-    </button>
-    <button class="view-btn" onclick="setView('side')" data-tip="侧面视角">
-      ◐
-    </button>
-    <button
-      class="view-btn active"
-      onclick="setView('free')"
-      data-tip="自由视角"
-    >
-      ◈
-    </button>
-    <button
-      class="view-btn"
-      onclick="toggleRotate()"
-      id="rotateBtn"
-      data-tip="自动旋转"
-    >
-      ↻
-    </button>
-  </div>
-</div>
-  <!-- Three.js r160 ES Modules -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-    }
-  }
-  </script>
-  <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    
-    // 挂载到window供全局使用
-    window.THREE = THREE;
-    window.OrbitControls = OrbitControls;
-    // 检查Three.js是否加载成功
-    if (typeof THREE === 'undefined') {
-      document.getElementById('loading').innerHTML = 
-        '<div style="color:#ff6b6b;text-align:center;">' +
-        '<div style="font-size:32px;margin-bottom:15px;">⚠</div>' +
-        '<div style="margin-bottom:10px;">3D引擎加载失败</div>' +
-        '<div style="font-size:12px;color:#888;">请检查网络连接后刷新页面</div>' +
-        '</div>';
-      throw new Error('Three.js failed to load');
-    }
-
-    // 配置参数
-    const Config = {
-      progress: 0,
-      subsidenceDepth: 2.0,
-      waterLevel: 1.5,
-      sedimentThickness: 1.0,
-      aridRate: 1.0,        // 干旱化速率
-      erosionIntensity: 1.0,
-      ridgeDensity: 10
-    };
-
-    // 阶段说明 - 温度和湿度会根据干旱化速率动态调整
-    const stageData = [
-      { name: '初始平原', baseTemp: 18, baseHumid: 45, wind: 0, text: '平坦地表，古老基岩构成。即将经历剧烈构造运动。' },
-      { name: '地壳下沉', baseTemp: 16, baseHumid: 50, wind: 2, text: '构造运动使地壳<b>断裂下沉</b>，形成低洼<b class="highlight">断陷盆地</b>，为湖泊形成创造条件。' },
-      { name: '湖泊沉积', baseTemp: 14, baseHumid: 75, wind: 3, text: '降水汇入形成<b>内陆湖泊</b>。粉砂、黏土、盐类逐层沉积，形成<b class="highlight">湖相沉积岩</b>。' },
-      { name: '气候干裂', baseTemp: 28, baseHumid: 20, wind: 5, text: '气候<b>暖干化</b>，湖泊萎缩干涸。湖床裸露产生<b class="highlight">龟裂纹</b>，成为侵蚀突破口。' },
-      { name: '风力侵蚀', baseTemp: 35, baseHumid: 10, wind: 12, text: '强劲定向风沿裂隙<b>磨蚀吹蚀</b>。沟槽加深，坚硬层形成<b class="highlight">垄脊</b>，软弱层成<b class="highlight">沟槽</b>。' }
-    ];
-
-    let scene, camera, renderer, controls, terrain, water, terrainUniforms, rainParticles, windParticles;
-    let isPlaying = false, autoRotate = false;
-    let clock = new THREE.Clock();
-
-    function init() {
-      const container = document.getElementById('right-panel');
-      
-      scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x020408, 0.012);
-      
-      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-      camera.position.set(15, 12, 15);
-      
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.shadowMap.enabled = true;
-      container.appendChild(renderer.domElement);
-      
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.05;
-      controls.maxPolarAngle = Math.PI / 2 - 0.05;
-      controls.minDistance = 5;
-      controls.maxDistance = 50;
-      
-      setupLights();
-      setupTerrain();
-      setupWater();
-      setupWeatherEffects();
-      setupHelpers();
-      
-      document.getElementById('loading').style.display = 'none';
-      window.addEventListener('resize', onResize);
-      setupUI();
-      animate();
-    }
-
-    function setupLights() {
-      scene.add(new THREE.AmbientLight(0x404050, 1.2));
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
-      dirLight.position.set(-10, 20, 10);
-      dirLight.castShadow = true;
-      dirLight.shadow.mapSize.set(2048, 2048);
-      scene.add(dirLight);
-      const p1 = new THREE.PointLight(0xffaa00, 0.6, 100);
-      p1.position.set(20, 15, -20);
-      scene.add(p1);
-      const p2 = new THREE.PointLight(0x00f3ff, 0.4, 50);
-      p2.position.set(-15, 5, 15);
-      scene.add(p2);
-    }
-
-    function setupTerrain() {
-      const vs = `
-        varying vec2 vUv;
-        varying float vElevation;
-        varying float vErosion;
-        varying float vCrack;
-        varying vec3 vPos;
-        uniform float uTime, uProgress, uSubsidenceDepth, uErosionIntensity, uRidgeDensity, uSedimentThickness, uAridRate;
-        
-        vec3 permute(vec3 x){return mod(((x*34.0)+1.0)*x,289.0);}
-        float snoise(vec2 v){
-          const vec4 C=vec4(0.211324865405187,0.366025403784439,-0.577350269189626,0.024390243902439);
-          vec2 i=floor(v+dot(v,C.yy));vec2 x0=v-i+dot(i,C.xx);
-          vec2 i1=(x0.x>x0.y)?vec2(1,0):vec2(0,1);
-          vec4 x12=x0.xyxy+C.xxzz;x12.xy-=i1;i=mod(i,289.0);
-          vec3 p=permute(permute(i.y+vec3(0,i1.y,1))+i.x+vec3(0,i1.x,1));
-          vec3 m=max(0.5-vec3(dot(x0,x0),dot(x12.xy,x12.xy),dot(x12.zw,x12.zw)),0.0);
-          m=m*m;m=m*m;
-          vec3 x=2.0*fract(p*C.www)-1.0;vec3 h=abs(x)-0.5;
-          vec3 ox=floor(x+0.5);vec3 a0=x-ox;
-          m*=1.79284291400159-0.85373472095314*(a0*a0+h*h);
-          vec3 g;g.x=a0.x*x0.x+h.x*x0.y;g.yz=a0.yz*x12.xz+h.yz*x12.yw;
-          return 130.0*dot(m,g);
+    <!-- Three.js r160 ES Modules -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
         }
-        void main(){
-          vUv=uv;
-          vec3 pos=position;
-          float baseNoise=snoise(uv*3.0)*0.12;
-          pos.y+=baseNoise;
-          float d=distance(uv,vec2(0.5));
-          float basinMask=smoothstep(0.6,0.12,d);
-          
-          // 阶段1: 地壳下沉
-          float subProg=smoothstep(0.0,0.25,uProgress);
-          pos.y-=basinMask*uSubsidenceDepth*subProg;
-          
-          // 阶段2-3: 沉积层
-          float sedProg=smoothstep(0.25,0.45,uProgress);
-          if(d<0.5) pos.y+=uSedimentThickness*sedProg*basinMask*0.25;
-          
-          // 阶段4: 干裂纹 - 干旱化速率影响裂隙密度和深度
-          float crackStart = 0.45 / uAridRate;  // 干旱化速率越高，裂隙越早出现
-          float crackEnd = 0.6 / uAridRate;
-          float crackProg=smoothstep(crackStart, crackEnd, uProgress);
-          vec2 crackUv=vec2(uv.x*2.0, uv.y*uRidgeDensity);
-          float crackNoise=snoise(crackUv*5.0);
-          float crackWidth = 0.15 * uAridRate;  // 干旱化速率影响裂隙宽度
-          float crackMask=1.0-smoothstep(0.0, crackWidth, abs(crackNoise));
-          float crack=crackMask*0.1*crackProg*basinMask*uAridRate;
-          vCrack=crackMask*crackProg;
-          
-          // 阶段5: 风蚀
-          float eroProg=smoothstep(0.6,1.0,uProgress);
-          float eroWidth=0.15+eroProg*0.25*uErosionIntensity;
-          float eroMask=1.0-smoothstep(0.0,eroWidth,abs(crackNoise));
-          float eroDepth=eroProg*uErosionIntensity*1.8;
-          float finalEro=eroMask*eroDepth*basinMask;
-          
-          pos.y-=crack;
-          pos.y-=finalEro;
-          
-          vElevation=pos.y;
-          vErosion=finalEro;
-          vPos=pos;
-          gl_Position=projectionMatrix*modelViewMatrix*vec4(pos,1.0);
-        }`;
-      const fs = `
-        varying vec2 vUv;
-        varying float vElevation;
-        varying float vErosion;
-        varying float vCrack;
-        varying vec3 vPos;
-        uniform float uProgress;
-        void main(){
-          vec3 cBase=vec3(0.65,0.55,0.4);
-          vec3 cSed=vec3(0.55,0.45,0.35);
-          vec3 cClay=vec3(0.75,0.55,0.35);
-          vec3 cCrack=vec3(0.3,0.22,0.15);
-          vec3 cEro=vec3(0.35,0.25,0.18);
-          vec3 cRidge=vec3(0.82,0.72,0.52);
-          
-          vec3 col=cBase;
-          float d=distance(vUv,vec2(0.5));
-          float basin=smoothstep(0.55,0.2,d);
-          
-          col=mix(col,cSed,basin*smoothstep(0.25,0.45,uProgress));
-          float dryProg=smoothstep(0.45,0.6,uProgress);
-          col=mix(col,cClay,dryProg*basin*0.7);
-          col=mix(col,cCrack,vCrack*0.8);
-          
-          float eroProg=smoothstep(0.6,1.0,uProgress);
-          if(vErosion>0.05){
-            col=mix(col,cEro,min(vErosion*1.5,1.0));
-          }else if(eroProg>0.0&&basin>0.3&&vErosion<0.02){
-            col=mix(col,cRidge,eroProg*0.6);
-          }
-          
-          vec3 dx=dFdx(vPos),dy=dFdy(vPos);
-          vec3 n=normalize(cross(dx,dy));
-          float diff=max(dot(n,normalize(vec3(-1,2,1))),0.0);
-          col*=(0.5+0.6*diff);
-          
-          gl_FragColor=vec4(col,1.0);
-        }`;
-      const geo = new THREE.PlaneGeometry(20, 20, 256, 256);
-      geo.rotateX(-Math.PI / 2);
-      terrainUniforms = {
-        uTime: { value: 0 },
-        uProgress: { value: 0 },
-        uSubsidenceDepth: { value: Config.subsidenceDepth },
-        uErosionIntensity: { value: Config.erosionIntensity },
-        uRidgeDensity: { value: Config.ridgeDensity },
-        uSedimentThickness: { value: Config.sedimentThickness },
-        uAridRate: { value: Config.aridRate }
-      };
-      terrain = new THREE.Mesh(geo, new THREE.ShaderMaterial({
-        vertexShader: vs,
-        fragmentShader: fs,
-        uniforms: terrainUniforms,
-        side: THREE.DoubleSide
-      }));
-      terrain.receiveShadow = true;
-      scene.add(terrain);
-    }
-
-    function setupWater() {
-      const geo = new THREE.PlaneGeometry(18, 18, 32, 32);
-      geo.rotateX(-Math.PI / 2);
-      water = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({
-        color: 0x0088cc,
-        transparent: true,
-        opacity: 0,
-        shininess: 100,
-        side: THREE.DoubleSide
-      }));
-      water.position.y = -10;
-      scene.add(water);
-    }
-
-    function setupWeatherEffects() {
-      // 雨滴粒子
-      const rainGeo = new THREE.BufferGeometry();
-      const rainCount = 1000;
-      const rainPos = new Float32Array(rainCount * 3);
-      for (let i = 0; i < rainCount; i++) {
-        rainPos[i * 3] = (Math.random() - 0.5) * 30;
-        rainPos[i * 3 + 1] = Math.random() * 20;
-        rainPos[i * 3 + 2] = (Math.random() - 0.5) * 30;
       }
-      rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
-      rainParticles = new THREE.Points(rainGeo, new THREE.PointsMaterial({
-        color: 0x88ccff, size: 0.08, transparent: true, opacity: 0
-      }));
-      scene.add(rainParticles);
-
-      // 风沙粒子
-      const windGeo = new THREE.BufferGeometry();
-      const windCount = 800;
-      const windPos = new Float32Array(windCount * 3);
-      for (let i = 0; i < windCount; i++) {
-        windPos[i * 3] = (Math.random() - 0.5) * 30;
-        windPos[i * 3 + 1] = Math.random() * 5 + 0.5;
-        windPos[i * 3 + 2] = (Math.random() - 0.5) * 30;
-      }
-      windGeo.setAttribute('position', new THREE.BufferAttribute(windPos, 3));
-      windParticles = new THREE.Points(windGeo, new THREE.PointsMaterial({
-        color: 0xd4c4a8, size: 0.1, transparent: true, opacity: 0
-      }));
-      scene.add(windParticles);
-    }
-
-    function setupHelpers() {
-      const starGeo = new THREE.BufferGeometry();
-      const starPos = new Float32Array(400 * 3);
-      for (let i = 0; i < 400; i++) {
-        const t = Math.random() * Math.PI * 2, p = Math.random() * Math.PI, r = 70 + Math.random() * 30;
-        starPos[i * 3] = r * Math.sin(p) * Math.cos(t);
-        starPos[i * 3 + 1] = r * Math.cos(p) * 0.5 + 15;
-        starPos[i * 3 + 2] = r * Math.sin(p) * Math.sin(t);
-      }
-      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-      scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x8ab4f8, size: 0.4 })));
-    }
-
-    function setupUI() {
-      document.getElementById('progress-slider').addEventListener('input', function(e) {
-        Config.progress = parseFloat(e.target.value) / 100;
-        updateUI();
-      });
-      document.getElementById('subsidence-slider').addEventListener('input', function(e) {
-        Config.subsidenceDepth = parseFloat(e.target.value);
-        document.getElementById('subsidence-val').textContent = e.target.value + 'm';
-      });
-      document.getElementById('water-slider').addEventListener('input', function(e) {
-        Config.waterLevel = parseFloat(e.target.value);
-        document.getElementById('water-val').textContent = e.target.value + 'm';
-      });
-      document.getElementById('sediment-slider').addEventListener('input', function(e) {
-        Config.sedimentThickness = parseFloat(e.target.value);
-        document.getElementById('sediment-val').textContent = e.target.value + 'm';
-      });
-      document.getElementById('arid-slider').addEventListener('input', function(e) {
-        Config.aridRate = parseFloat(e.target.value);
-        document.getElementById('arid-val').textContent = e.target.value + 'x';
-      });
-      document.getElementById('erosion-slider').addEventListener('input', function(e) {
-        Config.erosionIntensity = parseFloat(e.target.value);
-        document.getElementById('erosion-val').textContent = e.target.value;
-      });
-      document.getElementById('density-slider').addEventListener('input', function(e) {
-        Config.ridgeDensity = parseInt(e.target.value);
-        document.getElementById('density-val').textContent = e.target.value;
-      });
-      document.getElementById('playBtn').addEventListener('click', togglePlay);
-      document.getElementById('resetBtn').addEventListener('click', resetSim);
-      document.querySelectorAll('.stage-dot').forEach(function(dot) {
-        dot.addEventListener('click', function() {
-          var s = parseInt(dot.dataset.stage);
-          Config.progress = [0, 0.15, 0.35, 0.52, 0.75][s];
-          document.getElementById('progress-slider').value = Config.progress * 100;
-          updateUI();
-        });
-      });
-    }
-
-    function togglePlay() {
-      isPlaying = !isPlaying;
-      document.getElementById('playBtn').textContent = isPlaying ? '⏸ 暂停' : '▶ 播放';
-      document.getElementById('playBtn').classList.toggle('active', isPlaying);
-    }
-
-    function resetSim() {
-      isPlaying = false;
-      Config.progress = 0;
-      document.getElementById('progress-slider').value = 0;
-      document.getElementById('playBtn').textContent = '▶ 播放';
-      document.getElementById('playBtn').classList.remove('active');
-      updateUI();
-    }
-
-    function updateUI() {
-      var p = Config.progress;
-      document.getElementById('progress-val').textContent = Math.round(p * 100) + '%';
-      document.getElementById('sim-time').textContent = Math.round(p * 500) + ' 万年';
-      var stage = 0;
-      if (p >= 0.75) stage = 4;
-      else if (p >= 0.52) stage = 3;
-      else if (p >= 0.35) stage = 2;
-      else if (p >= 0.15) stage = 1;
-      var data = stageData[stage];
-      document.getElementById('sim-stage').textContent = data.name;
-      document.getElementById('explanation-box').innerHTML = '<b>当前：</b>' + data.name + '<br><br>' + data.text;
-      
-      // 温度和湿度根据干旱化速率动态调整
-      var tempAdjust = (stage >= 3) ? (Config.aridRate - 1) * 8 : 0;  // 干裂和侵蚀阶段温度受干旱化影响
-      var humidAdjust = (stage >= 3) ? (Config.aridRate - 1) * -10 : 0;  // 干旱化速率越高湿度越低
-      var temp = Math.round(data.baseTemp + tempAdjust);
-      var humid = Math.max(5, Math.round(data.baseHumid + humidAdjust));
-      
-      document.getElementById('temp-val').textContent = temp + '°C';
-      document.getElementById('humid-val').textContent = humid + '%';
-      document.getElementById('wind-val').textContent = data.wind + ' m/s';
-      
-      document.querySelectorAll('.stage-dot').forEach(function(dot, i) {
-        dot.classList.remove('active', 'completed');
-        if (i < stage) dot.classList.add('completed');
-        else if (i === stage) dot.classList.add('active');
-      });
-    }
-
-    window.setView = function(view) {
-      document.querySelectorAll('.view-btn').forEach(function(b) { b.classList.remove('active'); });
-      event.target.classList.add('active');
-      var t = {
-        top: { x: 0, y: 25, z: 0.1 },
-        front: { x: 0, y: 8, z: 20 },
-        side: { x: 20, y: 8, z: 0 },
-        free: { x: 15, y: 12, z: 15 }
-      }[view];
-      animateCam(t);
-    };
-
-    function animateCam(t) {
-      var s = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
-      var st = Date.now();
-      (function u() {
-        var e = Math.min(1, (Date.now() - st) / 800);
-        var ez = 1 - Math.pow(1 - e, 3);
-        camera.position.set(s.x + (t.x - s.x) * ez, s.y + (t.y - s.y) * ez, s.z + (t.z - s.z) * ez);
-        camera.lookAt(0, 0, 0);
-        if (e < 1) requestAnimationFrame(u);
-      })();
-    }
-
-    window.toggleRotate = function() {
-      autoRotate = !autoRotate;
-      document.getElementById('rotateBtn').classList.toggle('active', autoRotate);
-    };
-
-    function updateSim() {
-      var p = Config.progress;
-      if (terrainUniforms) {
-        terrainUniforms.uProgress.value = p;
-        terrainUniforms.uSubsidenceDepth.value = Config.subsidenceDepth;
-        terrainUniforms.uErosionIntensity.value = Config.erosionIntensity;
-        terrainUniforms.uRidgeDensity.value = Config.ridgeDensity;
-        terrainUniforms.uSedimentThickness.value = Config.sedimentThickness;
-        terrainUniforms.uAridRate.value = Config.aridRate;
-      }
-      
-      // 水面 - 干旱化速率影响湖泊干涸速度
-      var dryStart = 0.48 / Config.aridRate;  // 干旱化速率越高，干涸越早开始
-      var dryEnd = 0.62 / Config.aridRate;
-      var wy = -10, wo = 0;
-      if (p > 0.18 && p <= 0.32) {
-        var t = (p - 0.18) / 0.14;
-        wy = -Config.subsidenceDepth + Config.waterLevel * t * 0.8;
-        wo = t * 0.65;
-      } else if (p > 0.32 && p <= dryStart) {
-        wy = -Config.subsidenceDepth + Config.waterLevel * 0.8;
-        wo = 0.65;
-      } else if (p > dryStart && p <= dryEnd) {
-        var t = 1 - (p - dryStart) / (dryEnd - dryStart);
-        wy = -Config.subsidenceDepth + Config.waterLevel * t * 0.8;
-        wo = t * 0.65;
-      }
-      water.position.y += (wy - water.position.y) * 0.08;
-      water.material.opacity += (wo - water.material.opacity) * 0.08;
-      
-      // 雨滴 (湖泊阶段)
-      var rainOp = 0;
-      if (p > 0.2 && p < 0.5) rainOp = Math.min(0.6, (p - 0.2) * 3);
-      if (p > 0.4) rainOp = Math.max(0, 0.6 - (p - 0.4) * 3);
-      rainParticles.material.opacity = rainOp;
-      if (rainOp > 0) {
-        var pos = rainParticles.geometry.attributes.position;
-        for (var i = 0; i < pos.count; i++) {
-          var y = pos.getY(i) - 0.3;
-          if (y < -2) y = 18;
-          pos.setY(i, y);
-        }
-        pos.needsUpdate = true;
-      }
-      
-      // 风沙 (侵蚀阶段)
-      var windOp = 0;
-      if (p > 0.6) windOp = Math.min(0.7, (p - 0.6) * 2);
-      windParticles.material.opacity = windOp;
-      if (windOp > 0) {
-        var pos = windParticles.geometry.attributes.position;
-        var speed = Config.erosionIntensity * 0.15;
-        for (var i = 0; i < pos.count; i++) {
-          var x = pos.getX(i) + speed;
-          if (x > 15) x = -15;
-          pos.setX(i, x);
-          pos.setY(i, pos.getY(i) + (Math.random() - 0.5) * 0.05);
-        }
-        pos.needsUpdate = true;
-      }
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      var time = clock.getElapsedTime();
-      if (terrainUniforms) terrainUniforms.uTime.value = time;
-      if (isPlaying && Config.progress < 1) {
-        Config.progress += 0.0006;
-        document.getElementById('progress-slider').value = Config.progress * 100;
-        updateUI();
-      }
-      if (autoRotate) {
-        var a = time * 0.2;
-        camera.position.x = Math.sin(a) * 18;
-        camera.position.z = Math.cos(a) * 18;
-        camera.lookAt(0, 0, 0);
-      }
-      updateSim();
-      controls.update();
-      renderer.render(scene, camera);
-    }
-
-    function onResize() {
-      var c = document.getElementById('right-panel');
-      camera.aspect = c.clientWidth / c.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(c.clientWidth, c.clientHeight);
-    }
-
-    init();
-  </script>
-</body>
+    </script>
+    <script type="module" src="js/main.js"></script>
+  </body>
 </html>
